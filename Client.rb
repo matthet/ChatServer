@@ -21,17 +21,16 @@ class Client
   end
  
   def send
-    
     @request = Thread.new do
       loop {
         msg = $stdin.gets.chomp
-        @server.puts( msg )
+        @server.puts(msg)
       }
     end
   end
 end
 
-port = 2631
+port = 2632
 host_ip = Socket.ip_address_list.find { |ai| ai.ipv4? && !ai.ipv4_loopback? }.ip_address
 server = TCPSocket.open(host_ip, port)
 Client.new(server)
