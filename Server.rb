@@ -6,12 +6,12 @@ class Server
     @port = port
     @ip = ip
     @server = TCPServer.new(@ip, @port)
-    @connections = Hash.new
     @rooms = Hash.new
     @clients = Hash.new
-    @connections[:server] = @server
-    @connections[:rooms] = @rooms
-    @connections[:clients] = @clients
+    @room_names = Hash.new
+    @room_refs = Hash.new
+    @rooms[:room_names] = @room_names
+    @rooms[:room_refs] = @room_refs
 
     @size = size
     @jobs = Queue.new
@@ -42,13 +42,13 @@ class Server
           if message[0..3] == "HELO"
             n = message.length
 	    nick_name = message[5..n]
-            @connections[:clients].each do |other_name, other_client|
+            @clients.each do |other_name, other_client|
               if nick_name == other_name || client == other_client
                 client.puts "This username already exists!"
                 client.close
               end
             end
-            @connections[:clients][nick_name] = client
+            @clients[nick_name] = client
             client.puts"\n#{message}IP:#{@ip}\nPort:#{@port}\nStudentID:11374331\n"
 	    listen_client(client)
 	  else
@@ -79,6 +79,21 @@ class Server
           join_string = msg.split(" ")
 	  n = join_string[0].length
 	  room_name = join_string[0][14..n]
+	  n = join_string[3].length
+	  nick_name = join_string[3][12..n]
+	  room_exists = 0
+	  room_ref = 0
+	    @rooms[:room_names].each do |other_name, room_ref|
+	      if room_name == other_name
+	        room_ref = @rooms[:room_names][room_name]
+	        room_exists = 1
+	      end
+            end
+	    if room_exists == 0
+	      room_ref = rand(500)
+	      @rooms[:room_names][room_name] = room_ref
+	    end
+	    (@rooms[:room_refs][room_ref] ||= []) << nick_name            
         elsif msg == "KILL_SERVICE\n"
           client.puts("Service Killed")
           @server.close
