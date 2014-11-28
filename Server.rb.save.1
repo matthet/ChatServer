@@ -120,8 +120,10 @@ class Server
           join_id = chat_s[1][8..chat_s[1].length-1]
 	  nick_name = chat_s[2][12..chat_s[2].length-1]
 	  message = client.gets.chop
-	  chat_request(room_ref, nick_name, message, client)
-	elsif request[0..11] == "DISCONNECT:0" 
+	  message = message[8..message.length-1].gsub('\n', 
+	  puts message
+	  #send_message(room_ref, nick_name, message, client)
+	elsif msg[0..11] == "DISCONNECT:0"
 	  client.close
         elsif msg == "KILL_SERVICE"
           client.puts("Service Killed")
@@ -176,20 +178,6 @@ class Server
       client.puts "\nLEFT_CHATROOM:#{local_room_ref}\nJOIN_ID:#{join_id}\n\n"
     end
   end
-
-  # Send message to other members of chatroom
-  def chat_request(room_ref, nick_name, message, client)
-    ref = room_ref.to_i
-    @rooms[:room_refs][ref].each do |other_member_name|
-      unless other_member_name == nick_name
-        @clients[:client_ips].each do |other_name, other_client|
-          if other_member_name == other_name
-            other_client.puts "\nCHAT:#{room_ref}\nCLIENT_NAME:#{nick_name}\nMESSAGE:#{message}\n\n"
-          end
-        end
-      end
-    end
-  end	  
 
   # When closing down application, wait for any jobs in the pool to finish before exit 
   def shutdown
