@@ -1,4 +1,3 @@
-
 require 'thread'
 require "socket"
 
@@ -42,97 +41,80 @@ class Server
   run
   end
   
+  # Tell the pool that work is to be done: a client is trying to connect
+  def schedule(*args, &block)
+    @jobs << [block, args]
+  end
+
   # Entry Point
   # Schedule a client request
-  # Identify client (must be unique!)
   def run
     loop do
       schedule(@server.accept) do |client|
-	client.puts "Please Login to Connect (HELO text):"
-        message = client.gets.chomp
-        if message[0..3] == "HELO"
-	  nick_name = message[5..message.length]
-          @clients[:client_ips].each do |other_name, other_client|
-            if nick_name == other_name || client == other_client
-              client.puts "This username already exists!"
-              client.close
-            end
-          end
-          @clients[:client_ips][nick_name] = client
-          client.puts"\n#{message}\nIP:#{@ip}\nPort:#{@port}\nStudentID:11374331\n\n"
-          @join_id += 1
-	  @clients[:join_ids][nick_name] = @join_id
-          listen_client(client)
-	else
-	  client.puts "Input not recognised"
-	  client.close
-        end 
+        listen_client(client)
       end
     end
     server.close
     at_exit { p.shutdown }
   end
-  
-  # Tell the pool that work is to be done: a client is trying to connect
-  def schedule(*args, &block)
-    @jobs << [block, args]
-  end
     
-  # After login, a client may send join, leave and message requests
+  # Listen and Respond to all Client instance messages
   def listen_client(client)
     loop do
       request = client.gets
-        if request[0..13] == "JOIN_CHATROOM:"
-	  $i = 0
-	  request.chop << " "
-      	  while $i < 3 do
-            line = client.gets
-            request << line.chop << " "
-            $i += 1
-          end
-          join_s = request.split(" ")
-          room_name = join_s[0][14..join_s[0].length-1]
-          nick_name = join_s[3][12..join_s[3].length-1]
-          join_request(room_name, nick_name, client)
-	elsif request[0..14] == "LEAVE_CHATROOM:"
-	  $i = 0
-	  request.chop << " "
-	  while $i < 2 do
-	    line = client.gets
-	    request << line.chop << " "
-	    $i += 1
-	  end
-	  leave_s = request.split(" ")
-	  room_ref = leave_s[0][15..leave_s[0].length-1]
-	  join_id = leave_s[1][8..leave_s[1].length-1]
-	  nick_name = leave_s[2][12..leave_s[2].length-1]
-	  leave_request(room_ref, join_id, nick_name, client)
-	elsif request[0..4] == "CHAT:"
-	  $i = 0
-	  request.chop << " "
-	  while $i < 2 do
-	    line = client.gets
-            request << line.chop << " "
-            $i += 1
-          end
-	  chat_s = request.split(" ")
-	  room_ref = chat_s[0][5..chat_s[0].length-1]
-          join_id = chat_s[1][8..chat_s[1].length-1]
-	  nick_name = chat_s[2][12..chat_s[2].length-1]
-	  message = client.gets.chop
-	  chat_request(room_ref, nick_name, message, client)
-	elsif request[0..11] == "DISCONNECT:0" 
-	  client.close
-        elsif msg == "KILL_SERVICE"
-          client.puts("Service Killed")
-          @server.close
+      puts request
+      if request[0..3] == "HELO"
+        nick_name = request[5..request.length].chop
+        client.puts "HELO #{nick_name}\nIP:#{@ip}\nPort:#{@port}\nStudentID:11374331"
+      elsif request[0..13] == "JOIN_CHATROOM:"
+        room_name = request[14..request.length-1].chop
+        i = 0
+        while i < 3
+          line = client.gets.chop
+          i += 1
         end
+        nick_name = line[12..line.length-1]
+        join_request(room_name, nick_name, client)
+      elsif request[0..14] == "LEAVE_CHATROOM:"
+        room_ref = request[16..request.length-1].chop
+        line = client.gets.chop
+        join_id = line[9..line.length-1]
+        line = client.gets.chop
+        nick_name = line[13..line.length-1]
+        leave_request(room_ref, join_id, nick_name, client)
+      elsif request[0..4] == "CHAT:"
+        $i = 0
+        request.chop << " "
+        while $i < 2 do
+          line = client.gets
+          request << line.chop << " "
+          $i += 1
+        end
+        chat_s = request.split(" ")
+        room_ref = chat_s[0][5..chat_s[0].length-1]
+        join_id = chat_s[1][8..chat_s[1].length-1]
+        nick_name = chat_s[2][12..chat_s[2].length-1]
+        message = client.gets.chop
+        chat_request(room_ref, nick_name, message, client)
+      elsif request[0..11] == "DISCONNECT:0"
+        client.close
+      elsif msg == "KILL_SERVICE"
+        client.puts("Service Killed")
+        @server.close
+      end
     end
   end
 
   # Add client to chat room specified
   # Create the chat room if it doesn't already exist
   def join_request(room_name, nick_name, client)
+    @clients[:client_ips].each do |other_name, other_client|
+      if nick_name == other_name || client == other_client
+        client.puts "This username already exists!"
+        client.close
+      end
+    end
+    @clients[:client_ips][nick_name] = client
     room_exists = 0
     local_room_ref = 0
     @rooms[:room_names].each do |other_name, room_ref|
@@ -146,8 +128,17 @@ class Server
       local_room_ref = @room_ref
       @rooms[:room_names][room_name] = local_room_ref
     end
-      (@rooms[:room_refs][local_room_ref] ||= []) << nick_name
-      client.puts "\nJOINED_CHATROOM:#{room_name}\nSERVER_IP:0\nPORT:0\nROOM_REF:#{local_room_ref}\nJOIN_ID:#{@clients[:join_ids][nick_name]}\n\n"
+    (@rooms[:room_refs][local_room_ref] ||= []) << nick_name
+    @join_id += 1
+    @clients[:join_ids][nick_name] = @join_id
+    client.puts "JOINED_CHATROOM:#{room_name}\nSERVER_IP:#{@ip}\nPORT:#{@port}\nROOM_REF:#{local_room_ref}\nJOIN_ID:#{@join_id}"
+    @rooms[:room_refs][local_room_ref].each do |other_member_name|
+      @clients[:client_ips].each do |other_name, other_client|
+        if other_member_name == other_name
+          other_client.puts "CHAT:#{local_room_ref}\nCLIENT_NAME:#{nick_name}\nMESSAGE:#{nick_name} has joined this chatroom."
+        end
+      end
+    end
   end
 
   # Remove client from chat room specified
