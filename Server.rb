@@ -1,4 +1,4 @@
-require 'thread'
+require 'thread' 
 require "socket"
 
 class Server
@@ -99,8 +99,10 @@ class Server
       elsif request[0..11] == "DISCONNECT:0"
         client.close
       elsif msg == "KILL_SERVICE"
-        client.puts("Service Killed")
+        client.puts "Service Killed"
         @server.close
+      else
+        client.puts "Don't understand your request"
       end
     end
   end
@@ -108,12 +110,6 @@ class Server
   # Add client to chat room specified
   # Create the chat room if it doesn't already exist
   def join_request(room_name, nick_name, client)
-    @clients[:client_ips].each do |other_name, other_client|
-      if nick_name == other_name || client == other_client
-        client.puts "This username already exists!"
-        client.close
-      end
-    end
     @clients[:client_ips][nick_name] = client
     room_exists = 0
     local_room_ref = 0
@@ -145,7 +141,7 @@ class Server
   # Error if room_ref does not exist or client is not a member
   def leave_request(room_ref, join_id, nick_name, client)
     local_room_ref = 0
-    $error_string = "\nERROR_CODE:0\nERROR_DESCRIPTION:Given Room Ref does not exist\n\n"
+    $error_string = "ERROR_CODE:0\nERROR_DESCRIPTION:Given Room Ref does not exist\n\n"
       @rooms[:room_names].each do |other_room_name, other_ref|
        if room_ref == other_ref.to_s
          local_room_ref = @rooms[:room_names][other_room_name]
@@ -158,13 +154,19 @@ class Server
       @rooms[:room_refs][local_room_ref].each do |other_name|
         if nick_name == other_name
 	  first_leave = 1
-	  @rooms[:room_refs][local_room_ref].delete nick_name
+          client.puts "LEFT_CHATROOM:#{local_room_ref}\nJOIN_ID:#{join_id}"
+        end
+      end
+      @rooms[:room_refs][local_room_ref].each do |other_member_name|
+        @clients[:client_ips].each do |other_name, other_client|
+          if other_member_name == other_name
+            other_client.puts "CHAT:#{local_room_ref}\nCLIENT_NAME:#{nick_name}\nMESSAGE:#{nick_name} has left this chatroom."
+          end
         end
       end
       if first_leave == 1
-	#tell chatroom
+        @rooms[:room_refs][local_room_ref].delete nick_name
       end
-      client.puts "\nLEFT_CHATROOM:#{local_room_ref}\nJOIN_ID:#{join_id}\n\n"
     end
   end
 
