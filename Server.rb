@@ -62,7 +62,6 @@ class Server
   def listen_client(client)
     loop do
       request = client.gets
-      puts request
       if request[0..3] == "HELO"
         nick_name = request[5..request.length].chop
         client.puts "HELO #{nick_name}\nIP:#{@ip}\nPort:#{@port}\nStudentID:11374331"
